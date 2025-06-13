@@ -20,6 +20,7 @@
         margin: 0;
         padding: 1rem;
         box-sizing: border-box;
+        transition: background-color 0.5s ease; /* Smooth transition for background */
       }
       .game-container {
         background: white;
@@ -66,7 +67,7 @@
         width: 0%;
         transition: width linear;
       }
-      .message-box {
+      .message-box, .correct-answer-popup {
         position: fixed;
         top: 50%;
         left: 50%;
@@ -82,11 +83,11 @@
         align-items: center;
         max-width: 300px;
       }
-      .message-box h3 {
+      .message-box h3, .correct-answer-popup h3 {
         color: #1e40af; /* Dark blue text */
         margin-bottom: 0.75rem;
       }
-      .message-box button {
+      .message-box button, .correct-answer-popup button {
         background-color: #3b82f6; /* Blue button */
         color: white;
         padding: 0.5rem 1rem;
@@ -95,11 +96,37 @@
         cursor: pointer;
         transition: background-color 0.2s;
       }
-      .message-box button:hover {
+      .message-box button:hover, .correct-answer-popup button:hover {
         background-color: #2563eb;
+      }
+      .correct-answer-popup {
+        background-color: #d1fae5; /* Light green for correct */
+        border-color: #34d399; /* Green border */
+        color: #065f46; /* Dark green text */
+      }
+      .correct-answer-popup h3 {
+        color: #065f46; /* Dark green text */
       }
       .hidden {
         display: none;
+      }
+
+      /* Style for black interstitial screen */
+      .interstitial-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: black;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 999; /* Below modal but above game elements */
+        color: white;
+        font-size: 2rem;
+        font-weight: bold;
+        transition: opacity 0.5s ease-in-out;
       }
     </style>
   </head>
@@ -142,12 +169,26 @@
       </div>
     </div>
 
+    <!-- Black Interstitial Screen -->
+    <div id="interstitial-screen" class="interstitial-screen hidden">
+        Next Question
+    </div>
+
+    <!-- Correct Answer Popup -->
+    <div id="correct-answer-popup" class="correct-answer-popup hidden">
+        <h3 class="text-xl font-bold">Correct!</h3>
+        <p id="correct-popup-message" class="text-lg mt-2"></p>
+    </div>
+
     <!-- Custom Modal for Alerts/Messages -->
     <div id="custom-modal" class="message-box">
       <h3 id="modal-title" class="text-lg font-semibold mb-3"></h3>
       <p id="modal-message" class="text-sm text-gray-700 mb-4"></p>
       <button id="modal-close-btn">OK</button>
     </div>
+
+    <!-- Tone.js for sound effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
 
     <script>
       // Global variables for Firebase (will be provided by the Canvas environment)
@@ -181,6 +222,10 @@
         const scoreEl = document.getElementById('score');
         const currentRoundEl = document.getElementById('current-round');
         const totalRoundsEl = document.getElementById('total-rounds');
+        const interstitialScreen = document.getElementById('interstitial-screen');
+        const correctAnswerPopup = document.getElementById('correct-answer-popup');
+        const correctPopupMessage = document.getElementById('correct-popup-message');
+
 
         // Custom Modal Elements
         const customModal = document.getElementById('custom-modal');
@@ -192,8 +237,11 @@
         let currentScore = 0;
         let currentRound = 0;
         let gameActive = false;
-        let timerInterval;
-        let imageTimerDuration = 3; // seconds
+        let responseTimerInterval; // Interval for the 5-second response window
+        const responseTimerDuration = 5; // Total time to view image, hear question, and speak
+        const imageHideDelay = 3; // Time after which the image disappears (within responseTimerDuration)
+        const interQuestionGap = 5; // Delay after answer evaluation before next question
+
         let currentQuestionIndex = 0;
         // Flag to prevent multiple evaluations if both onresult and onerror/onend fire
         let speechEvaluationTriggered = false; 
@@ -251,6 +299,11 @@
         recognition.maxAlternatives = 1; // Get only the most probable result
         recognition.continuous = false; // Important: Make sure it stops after one utterance or timeout
 
+        // --- Tone.js Synthesizer for sound effects ---
+        const synth = new Tone.Synth().toDestination();
+        // Set a softer volume for the synth to avoid being too loud
+        synth.volume.value = -12; // Adjust as needed, e.g., -6 for louder, -18 for softer
+
         // --- Custom Modal Functions (replacing alert()) ---
         function showModal(title, message) {
           modalTitle.textContent = title;
@@ -263,6 +316,20 @@
         }
 
         modalCloseBtn.addEventListener('click', hideModal);
+
+        /**
+         * Shows the correct answer popup with a given message.
+         * Automatically hides after a short duration.
+         * @param {string} message - The message to display in the popup.
+         */
+        function showCorrectAnswerPopup(message) {
+            correctPopupMessage.textContent = message;
+            correctAnswerPopup.classList.remove('hidden');
+            // Hide the popup after a short delay (e.g., 1.5 seconds)
+            setTimeout(() => {
+                correctAnswerPopup.classList.add('hidden');
+            }, 1500); 
+        }
 
         // --- Game Logic Functions ---
 
@@ -284,10 +351,16 @@
          * Proceeds to the next round of the game.
          */
         function nextRound() {
+          console.log(`nextRound() called. Current index: ${currentQuestionIndex}, Total questions: ${quizData.length}`);
           if (currentQuestionIndex >= quizData.length) {
             endGame();
             return;
           }
+
+          // Ensure game screen is visible and background is reset
+          document.body.style.backgroundColor = '#f0f4f8';
+          gameActiveScreen.classList.remove('hidden');
+          interstitialScreen.classList.add('hidden'); // Hide black screen
 
           currentRound++;
           currentRoundEl.textContent = currentRound;
@@ -299,41 +372,63 @@
           quizImage.alt = question.correctAnswer;
           quizImage.style.opacity = '1'; // Show image
 
-          questionTextEl.textContent = 'Memorize this image!';
-          startBtn.disabled = true; // Disable speech during memorization phase
+          // Display question immediately with photo
+          questionTextEl.textContent = question.question; 
           resultText.textContent = '...';
           speechEvaluationTriggered = false; // Reset flag for new round
 
-          startImageTimer();
+          startResponseTimer(); // Start the combined photo display and answer timer
         }
 
         /**
-         * Starts the 3-second countdown for image display.
+         * Starts the combined 5-second response timer (image visible for 3s, microphone active for 5s).
          */
-        function startImageTimer() {
-          let timeLeft = imageTimerDuration;
+        function startResponseTimer() {
+          let timeLeft = responseTimerDuration;
           timerDisplay.textContent = timeLeft;
-          timerBar.style.width = '100%'; // Start bar full
-          timerBar.style.transition = `width ${imageTimerDuration}s linear`; // Animate width over duration
+          timerBar.style.width = '100%'; 
+          timerBar.style.transition = `width ${responseTimerDuration}s linear`;
 
-          timerInterval = setInterval(() => {
+          // Activate microphone immediately when photo/question is shown
+          try {
+            console.log('startResponseTimer: Attempting to start speech recognition...');
+            recognition.start();
+            startBtn.textContent = 'Listening...';
+            startBtn.disabled = true; // Disable button while listening
+            resultText.textContent = 'Listening...';
+          } catch (error) {
+            console.error("startResponseTimer: Error starting recognition:", error);
+            // If recognition fails to start here, handle it as if no speech was detected
+            const currentQuestion = quizData[currentQuestionIndex];
+            evaluateAnswerWithAI("recognition start error (response phase)", currentQuestion.correctAnswer);
+            return; // Exit function if recognition failed to start
+          }
+
+          // Set timeout to hide image after imageHideDelay
+          setTimeout(() => {
+            console.log('Hiding image after 3 seconds.');
+            quizImage.style.opacity = '0';
+          }, imageHideDelay * 1000); // Convert to milliseconds
+
+          // Start the countdown for the full response duration
+          responseTimerInterval = setInterval(() => {
             timeLeft--;
             timerDisplay.textContent = timeLeft;
             if (timeLeft <= 0) {
-              clearInterval(timerInterval);
-              onImageTimerEnd();
+              clearInterval(responseTimerInterval);
+              onResponseTimerEnd();
             }
           }, 1000);
         }
 
         /**
-         * Actions to perform when the image display timer ends.
+         * Actions to perform when the full response timer ends.
+         * Stops speech recognition.
          */
-        function onImageTimerEnd() {
-          quizImage.style.opacity = '0'; // Hide image
-          const question = quizData[currentQuestionIndex];
-          questionTextEl.textContent = question.question;
-          startBtn.disabled = false; // Enable speech button
+        function onResponseTimerEnd() {
+          console.log('onResponseTimerEnd: Response timer finished. Stopping recognition if active.');
+          recognition.stop(); // This will trigger onresult or onerror('no-speech') or onend
+          // The evaluateAnswerWithAI call will be handled by onresult/onerror/onend
         }
 
         /**
@@ -344,23 +439,27 @@
           showModal("Game Over!", `You scored ${currentScore} points across ${quizData.length} rounds!`);
           gameStartScreen.classList.remove('hidden');
           gameActiveScreen.classList.add('hidden');
+          interstitialScreen.classList.add('hidden'); // Ensure black screen is off
+          document.body.style.backgroundColor = '#f0f4f8'; // Reset body background
         }
 
         /**
          * Evaluates the spoken answer against the correct answer using the Gemini API.
+         * This function always ensures nextRound is scheduled via its finally block.
          * @param {string} spokenAnswer - The text transcribed from user's speech.
          * @param {string} correctAnswer - The expected correct answer for the current question.
          */
         async function evaluateAnswerWithAI(spokenAnswer, correctAnswer) {
           // Prevent multiple evaluations if this function is called more than once for a single speech session
           if (speechEvaluationTriggered) {
-            console.log('Evaluation already triggered for this speech session. Skipping.');
+            console.log('evaluateAnswerWithAI: Evaluation already triggered for this speech session. Skipping.');
             return;
           }
-          speechEvaluationTriggered = true; // Set flag
+          speechEvaluationTriggered = true; // Set flag at the very beginning of processing
 
           evaluationText.textContent = 'Evaluating with AI...';
           evaluationText.style.color = '#8b5cf6'; // Purple for evaluating
+          startBtn.disabled = true; // Ensure button is disabled while processing AI
 
           try {
             const prompt = `You are a helpful AI assistant for a photo quiz game. A user has spoken an answer to a question, and I need you to evaluate if their spoken answer is correct or nearly correct based on the *expected correct answer*.
@@ -369,7 +468,7 @@
             Please respond with a JSON object containing \`isCorrect\` (boolean) and \`reason\` (string explaining why).
             Example correct: \`{ "isCorrect": true, "reason": "The spoken answer '${spokenAnswer}' is a perfect match for the expected correct answer '${correctAnswer}'" }\`
             Example nearly correct: \`{ "isCorrect": true, "reason": "The spoken answer '${spokenAnswer}' is very similar to the expected correct answer '${correctAnswer}', indicating a correct understanding." }\`
-            Example incorrect: \`{ "isCorrect": false, "reason": "The spoken answer '${spokenAnswer}' is not related to the expected correct answer '${correctAnswer}'" }\`
+            Example incorrect: \`{ "isCorrect": false, "reason": "The spoken answer '${spokenText}' is not related to the expected correct answer '${correctAnswer}'" }\`
             Consider synonyms, common mispronunciations, and slightly different phrasing as correct. Focus on the semantic meaning.`;
 
             let chatHistory = [];
@@ -400,7 +499,7 @@
             });
 
             const result = await response.json();
-            console.log('AI Evaluation Raw Result:', result);
+            console.log('evaluateAnswerWithAI: AI Evaluation Raw Result:', result);
 
             if (result.candidates && result.candidates.length > 0 &&
                 result.candidates[0].content && result.candidates[0].content.parts &&
@@ -413,6 +512,8 @@
                 scoreEl.textContent = currentScore;
                 evaluationText.textContent = `Correct! (+10 pts) - ${aiEvaluation.reason}`;
                 evaluationText.style.color = '#10b981'; // Green for correct
+                showCorrectAnswerPopup('That\'s right!'); // Show popup
+                synth.triggerAttackRelease("C4", "8n"); // Play a C4 note for 1/8th note duration
               } else {
                 evaluationText.textContent = `Incorrect! - ${aiEvaluation.reason}`;
                 evaluationText.style.color = '#ef4444'; // Red for incorrect
@@ -420,19 +521,29 @@
             } else {
               evaluationText.textContent = 'AI evaluation failed: Unexpected response format.';
               evaluationText.style.color = '#f97316'; // Orange for warning
-              console.error('AI evaluation failed: Unexpected response format', result);
+              console.error('evaluateAnswerWithAI: AI evaluation failed: Unexpected response format', result);
             }
           } catch (error) {
-            console.error('Error evaluating answer with AI:', error);
+            console.error('evaluateAnswerWithAI: Error evaluating answer with AI:', error);
             evaluationText.textContent = `AI evaluation error: ${error.message}`;
             evaluationText.style.color = '#ef4444'; // Red for error
           } finally {
-            startBtn.disabled = false; // Re-enable if needed for next round, or manage flow
-            currentQuestionIndex++;
-            // Increased delay to 5 seconds before next round or end game
-            setTimeout(() => {
-              nextRound();
-            }, 5000); // Wait 5 seconds before next round or end game
+            // This block ALWAYS executes, ensuring the game progresses
+            console.log('evaluateAnswerWithAI: Finally block executed. Scheduling next round.');
+            // Only increment currentQuestionIndex and schedule nextRound if game is still active
+            if (gameActive) { 
+                currentQuestionIndex++;
+                // Show black interstitial screen
+                gameActiveScreen.classList.add('hidden'); // Hide game content
+                document.body.style.backgroundColor = 'black'; // Set body background to black
+                interstitialScreen.classList.remove('hidden'); // Show "Next Question" screen
+
+                setTimeout(() => {
+                  console.log('evaluateAnswerWithAI: Inter-question gap finished. Calling nextRound(). Current question index after increment:', currentQuestionIndex);
+                  nextRound();
+                }, interQuestionGap * 1000); // Wait 5 seconds before next round or end game
+            }
+            // startBtn.disabled is handled by startResponseTimer() or nextRound()
           }
         }
 
@@ -442,87 +553,100 @@
         startGameBtn.addEventListener('click', startGame);
 
         recognition.onresult = (event) => {
+          console.log('recognition.onresult fired. Results:', event.results);
+          // Clear any active response timer since we got a result
+          if (responseTimerInterval) {
+              clearInterval(responseTimerInterval);
+          }
           const last = event.results.length - 1;
           const spokenText = event.results[last][0].transcript.trim();
 
           resultText.textContent = spokenText;
-          startBtn.disabled = true; // Disable during AI processing
-
           const currentQuestion = quizData[currentQuestionIndex];
-          // Only evaluate if not already triggered by an error or a previous result
-          if (!speechEvaluationTriggered) {
+          if (!speechEvaluationTriggered) { // Prevent double evaluation
+             console.log('recognition.onresult: Calling evaluateAnswerWithAI.');
              evaluateAnswerWithAI(spokenText, currentQuestion.correctAnswer);
+          } else {
+             console.log('recognition.onresult: Evaluation already triggered, skipping.');
           }
         };
 
         recognition.onend = () => {
-          if (gameActive) { // Only update button text if game is active
+          console.log('recognition.onend fired.');
+          if (gameActive) { 
             startBtn.textContent = 'Speak Your Answer';
-            // Important: Do NOT re-enable startBtn.disabled here. 
-            // It's handled by evaluateAnswerWithAI's finally block to prevent race conditions.
-
-            // If speech evaluation hasn't been triggered by onresult or no-speech error,
-            // this implies recognition ended for some other reason (e.g., short silence, permission issue).
-            // This fallback ensures game always progresses, unless it's a critical error like 'not-allowed'.
+            // This fallback ensures progression if onresult or specific onerror (like no-speech) didn't fire
             if (!speechEvaluationTriggered) {
-                console.log('Speech recognition ended without a result or explicit no-speech error. Treating as no answer.');
+                console.log('recognition.onend: Speech recognition ended without a result or explicit error. Triggering fallback evaluation.');
                 const currentQuestion = quizData[currentQuestionIndex];
-                evaluateAnswerWithAI("no answer detected", currentQuestion.correctAnswer);
+                evaluateAnswerWithAI("no answer detected (recognition.onend)", currentQuestion.correctAnswer);
+            } else {
+                console.log('recognition.onend: Evaluation already triggered, no fallback needed.');
             }
           }
         };
 
         recognition.onerror = (event) => {
-          console.error('Speech recognition error', event.error);
+          console.error('recognition.onerror fired:', event.error);
           let errorMessage = `An error occurred during speech recognition: ${event.error}`;
+          const currentQuestion = quizData[currentQuestionIndex]; 
+          
+          // Clear any active response timer since an error occurred
+          if (responseTimerInterval) {
+              clearInterval(responseTimerInterval);
+          }
+
           if (event.error === 'not-allowed') {
-            errorMessage = 'Microphone access was denied. Please allow microphone access in your browser settings to play.';
+            errorMessage = 'Microphone access was denied. Please allow microphone access in your browser settings to play. Game halted.';
             showModal("Speech Error", errorMessage);
-            startBtn.disabled = false; // Re-enable button
-            // This is a critical error, the game cannot proceed without user fixing permissions
+            startBtn.disabled = false; // Re-enable button to allow user to retry after fixing permissions
+            gameActive = false; // Halt game progression until permission is fixed
             speechEvaluationTriggered = true; // Mark as handled to prevent onend from triggering
-          } else if (event.error === 'no-speech') {
-            errorMessage = 'No speech was detected. Treating as incorrect answer.';
-            resultText.textContent = 'No speech detected.';
-            // Automatically evaluate as incorrect and proceed to next round
-            // Only evaluate if not already triggered
-            if (!speechEvaluationTriggered) {
-                evaluateAnswerWithAI("", quizData[currentQuestionIndex].correctAnswer); // Pass empty string for no speech
-            }
-          } else if (event.error === 'aborted') {
-            errorMessage = 'Speech recognition was aborted. This might happen if you click the button again too quickly or if another process interrupts.';
-            showModal("Speech Error", errorMessage);
-            startBtn.disabled = false; // Re-enable button
-            speechEvaluationTriggered = true; // Mark as handled
-          } else if (event.error === 'network') {
-            errorMessage = 'Network error during speech recognition. Please check your internet connection.';
-            showModal("Speech Error", errorMessage);
-            startBtn.disabled = false; // Re-enable button
-            speechEvaluationTriggered = true; // Mark as handled
           } else {
-            // For other unexpected errors
-            showModal("Speech Error", errorMessage);
-            startBtn.disabled = false; // Re-enable button
-            speechEvaluationTriggered = true; // Mark as handled
+            // For all other errors, we will trigger an evaluation to force game progression
+            if (!speechEvaluationTriggered) { 
+                if (event.error === 'no-speech') {
+                    errorMessage = 'No speech was detected. Treating as incorrect answer.';
+                    resultText.textContent = 'No speech detected.';
+                } else if (event.error === 'aborted') {
+                    errorMessage = 'Speech recognition was aborted. This might happen if you click the button again too quickly or if another process interrupts.';
+                    resultText.textContent = 'Speech aborted.';
+                } else if (event.error === 'network') {
+                    errorMessage = 'Network error during speech recognition. Please check your internet connection.';
+                    resultText.textContent = 'Network error.';
+                } else {
+                    resultText.textContent = `Error: ${event.error}`;
+                }
+                console.log(`recognition.onerror: Calling evaluateAnswerWithAI for error type '${event.error}'.`);
+                evaluateAnswerWithAI(`Error: ${event.error}`, currentQuestion.correctAnswer); 
+            } else {
+                console.log(`recognition.onerror: Evaluation already triggered for error type '${event.error}', skipping.`);
+            }
+
+            if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                 showModal("Speech Error", errorMessage);
+            }
           }
         };
 
+        // The start button is now primarily used for starting the game initially.
+        // During active gameplay, speech recognition is auto-started by startResponseTimer().
+        // Clicking this button during the response phase will attempt to restart recognition.
         startBtn.addEventListener('click', () => {
-          try {
-            console.log('Attempting to start speech recognition...'); // Added for debugging
-            recognition.start();
-            startBtn.textContent = 'Listening...';
-            startBtn.disabled = true;
-            resultText.textContent = 'Listening...';
-            evaluationText.textContent = '...';
-            evaluationText.style.color = '#8b5cf6'; // Reset color
-            speechEvaluationTriggered = false; // Reset flag when starting a new recognition session
-          } catch (error) {
-            console.error("Error starting recognition:", error);
-            showModal("Error Starting Speech", "Could not start speech recognition. It might already be active or there's a permission issue.");
-            startBtn.disabled = false; // Re-enable button
-            speechEvaluationTriggered = true; // Mark as handled to prevent onend fallback
-          }
+            if (!gameActive) {
+                startGame();
+            } else {
+                // If the game is active and the button is clicked, it means the user
+                // wants to retry speaking their answer for the current round.
+                console.log('startBtn click: Manual re-attempt to start speech recognition...');
+                // Ensure any previous recognition is stopped before starting a new one
+                recognition.stop(); 
+                // Clear any active response timer if the user manually tries to speak again
+                if (responseTimerInterval) {
+                    clearInterval(responseTimerInterval);
+                }
+                startResponseTimer(); // Restart the response phase
+            }
         });
       });
     </script>
