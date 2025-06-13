@@ -1,59 +1,530 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Welcome to Firebase Hosting</title>
-
-    <!-- update the version number as needed -->
-    <script defer src="/__/firebase/11.9.1/firebase-app-compat.js"></script>
-    <!-- include only the Firebase features as you need -->
-    <script defer src="/__/firebase/11.9.1/firebase-auth-compat.js"></script>
-    <script defer src="/__/firebase/11.9.1/firebase-database-compat.js"></script>
-    <script defer src="/__/firebase/11.9.1/firebase-firestore-compat.js"></script>
-    <script defer src="/__/firebase/11.9.1/firebase-functions-compat.js"></script>
-    <script defer src="/__/firebase/11.9.1/firebase-messaging-compat.js"></script>
-    <script defer src="/__/firebase/11.9.1/firebase-storage-compat.js"></script>
-    <script defer src="/__/firebase/11.9.1/firebase-analytics-compat.js"></script>
-    <script defer src="/__/firebase/11.9.1/firebase-remote-config-compat.js"></script>
-    <script defer src="/__/firebase/11.9.1/firebase-performance-compat.js"></script>
-    <!-- 
-      initialize the SDK after all desired features are loaded, set useEmulator to false
-      to avoid connecting the SDK to running emulators.
-    -->
-    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
-
-    <style media="screen">
-      body { background: #ECEFF1; color: rgba(0,0,0,0.87); font-family: Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
-      #message { background: white; max-width: 360px; margin: 100px auto 16px; padding: 32px 24px; border-radius: 3px; }
-      #message h2 { color: #ffa100; font-weight: bold; font-size: 16px; margin: 0 0 8px; }
-      #message h1 { font-size: 22px; font-weight: 300; color: rgba(0,0,0,0.6); margin: 0 0 16px;}
-      #message p { line-height: 140%; margin: 16px 0 24px; font-size: 14px; }
-      #message a { display: block; text-align: center; background: #039be5; text-transform: uppercase; text-decoration: none; color: white; padding: 16px; border-radius: 4px; }
-      #message, #message a { box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); }
-      #load { color: rgba(0,0,0,0.4); text-align: center; font-size: 13px; }
-      @media (max-width: 600px) {
-        body, #message { margin-top: 0; background: white; box-shadow: none; }
-        body { border-top: 16px solid #ffa100; }
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3-Second Photo Quiz</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background: #f0f4f8; /* Light blue-gray background */
+        color: #334155; /* Dark slate text */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        padding: 1rem;
+        box-sizing: border-box;
+      }
+      .game-container {
+        background: white;
+        border-radius: 1rem; /* More rounded corners */
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        padding: 2rem;
+        width: 100%;
+        max-width: 600px;
+        text-align: center;
+        margin-bottom: 1.5rem;
+      }
+      .quiz-image-wrapper {
+        position: relative;
+        width: 100%;
+        padding-top: 75%; /* 4:3 Aspect Ratio */
+        overflow: hidden;
+        border-radius: 0.75rem;
+        background-color: #e2e8f0; /* Light gray placeholder */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1.5rem;
+      }
+      .quiz-image {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: opacity 0.5s ease-in-out;
+      }
+      .timer-bar-container {
+        width: 100%;
+        height: 0.75rem;
+        background-color: #cbd5e1;
+        border-radius: 0.375rem;
+        margin-bottom: 1rem;
+        overflow: hidden;
+      }
+      .timer-bar {
+        height: 100%;
+        background-color: #3b82f6; /* Blue timer */
+        width: 0%;
+        transition: width linear;
+      }
+      .message-box {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #f0f9ff; /* Light blue background */
+        border: 1px solid #bfdbfe; /* Blue border */
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem;
+        z-index: 1000;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        max-width: 300px;
+      }
+      .message-box h3 {
+        color: #1e40af; /* Dark blue text */
+        margin-bottom: 0.75rem;
+      }
+      .message-box button {
+        background-color: #3b82f6; /* Blue button */
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      .message-box button:hover {
+        background-color: #2563eb;
+      }
+      .hidden {
+        display: none;
       }
     </style>
   </head>
   <body>
-    <h1>What is 2 + 2?</h1>
-    
-    <div id="game-container">
-      <canvas id="game-canvas" width="800" height="600"></canvas>
+    <div class="game-container">
+      <h1 class="text-3xl font-bold mb-4 text-blue-700">3-Second Photo Quiz</h1>
+      
+      <div id="game-start-screen" class="pb-4">
+        <button id="start-game-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300">
+          Start Game
+        </button>
+      </div>
+
+      <div id="game-active-screen" class="hidden">
+        <div class="quiz-image-wrapper">
+          <img id="quiz-image" src="" alt="Quiz Image" class="quiz-image">
+        </div>
+
+        <div id="timer-display" class="mb-4 text-lg font-semibold text-gray-600">Time left: <span id="time-left">3</span>s</div>
+        <div class="timer-bar-container">
+          <div id="timer-bar" class="timer-bar"></div>
+        </div>
+        
+        <h2 id="question-text" class="text-xl font-semibold mb-4 text-gray-800"></h2>
+
+        <div id="controls" class="flex flex-col items-center">
+          <button id="start-recognition-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 mb-4" disabled>
+            Speak Your Answer
+          </button>
+          <p class="text-gray-700">AI heard: <span id="result-text" class="font-medium text-blue-600">...</span></p>
+          <p class="text-gray-700 mt-2">Evaluation: <span id="evaluation-text" class="font-medium text-purple-600">Pending...</span></p>
+        </div>
+        
+        <div id="score-display" class="mt-6 text-xl font-bold text-gray-700">
+          Score: <span id="score" class="text-green-600">0</span>
+        </div>
+        <div id="round-display" class="mt-2 text-md font-medium text-gray-500">
+            Round: <span id="current-round">0</span> / <span id="total-rounds">0</span>
+        </div>
+      </div>
     </div>
 
-    <div id="controls">
-      <button id="start-recognition-btn">พูดเพื่อตอบ</button>
-      <p>AI ได้ยินว่า: <span id="result-text">...</span></p>
-    </div>
-    
-    <div id="score-display">
-      Score: <span id="score">0</span>
+    <!-- Custom Modal for Alerts/Messages -->
+    <div id="custom-modal" class="message-box">
+      <h3 id="modal-title" class="text-lg font-semibold mb-3"></h3>
+      <p id="modal-message" class="text-sm text-gray-700 mb-4"></p>
+      <button id="modal-close-btn">OK</button>
     </div>
 
-    <script src="scripts/main.js"></script>
-</body>
+    <script>
+      // Global variables for Firebase (will be provided by the Canvas environment)
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+      // Polyfill for crypto.randomUUID for older browsers (though typically modern browsers support it)
+      if (typeof crypto.randomUUID === 'undefined') {
+        crypto.randomUUID = function() {
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+        };
+      }
+    </script>
+    <script>
+      // Main game script
+      document.addEventListener('DOMContentLoaded', () => {
+        // --- HTML Elements ---
+        const startGameBtn = document.getElementById('start-game-btn');
+        const gameStartScreen = document.getElementById('game-start-screen');
+        const gameActiveScreen = document.getElementById('game-active-screen');
+        const quizImage = document.getElementById('quiz-image');
+        const timerDisplay = document.getElementById('time-left');
+        const timerBar = document.getElementById('timer-bar');
+        const questionTextEl = document.getElementById('question-text');
+        const startBtn = document.getElementById('start-recognition-btn');
+        const resultText = document.getElementById('result-text');
+        const evaluationText = document.getElementById('evaluation-text');
+        const scoreEl = document.getElementById('score');
+        const currentRoundEl = document.getElementById('current-round');
+        const totalRoundsEl = document.getElementById('total-rounds');
+
+        // Custom Modal Elements
+        const customModal = document.getElementById('custom-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+
+        // --- Game Variables ---
+        let currentScore = 0;
+        let currentRound = 0;
+        let gameActive = false;
+        let timerInterval;
+        let imageTimerDuration = 3; // seconds
+        let currentQuestionIndex = 0;
+        // Flag to prevent multiple evaluations if both onresult and onerror/onend fire
+        let speechEvaluationTriggered = false; 
+
+        // Expanded quiz data with 30 unique questions
+        let quizData = [
+          { imageUrl: "https://placehold.co/600x450/AEC6CF/000000?text=Eiffel+Tower", correctAnswer: "Eiffel Tower", question: "What famous landmark did you see?" },
+          { imageUrl: "https://placehold.co/600x450/FDFD96/000000?text=Sunflower", correctAnswer: "Sunflower", question: "What type of flower was in the picture?" },
+          { imageUrl: "https://placehold.co/600x450/BADA55/000000?text=Pyramid", correctAnswer: "Pyramid", question: "What ancient structure was shown?" },
+          { imageUrl: "https://placehold.co/600x450/FF6961/FFFFFF?text=Red+Apple", correctAnswer: "Red Apple", question: "What fruit was displayed?" },
+          { imageUrl: "https://placehold.co/600x450/77DD77/FFFFFF?text=Green+Tree", correctAnswer: "Green Tree", question: "What natural object was in the image?" },
+          { imageUrl: "https://placehold.co/600x450/89CFF0/000000?text=Blue+Ocean", correctAnswer: "Blue Ocean", question: "What large body of water was it?" },
+          { imageUrl: "https://placehold.co/600x450/FFD700/000000?text=Golden+Gate", correctAnswer: "Golden Gate Bridge", question: "Name the famous bridge." },
+          { imageUrl: "https://placehold.co/600x450/C8A2C8/000000?text=Lavender", correctAnswer: "Lavender", question: "What type of plant was that?" },
+          { imageUrl: "https://placehold.co/600x450/DE3163/FFFFFF?text=Heart+Shape", correctAnswer: "Heart Shape", question: "What shape was featured?" },
+          { imageUrl: "https://placehold.co/600x450/9FE2BF/000000?text=Forest+Path", correctAnswer: "Forest Path", question: "What kind of natural pathway did you see?" },
+          { imageUrl: "https://placehold.co/600x450/CCCCFF/000000?text=Mountain", correctAnswer: "Mountain", question: "What geographical feature was prominent?" },
+          { imageUrl: "https://placehold.co/600x450/FF7F50/000000?text=Orange", correctAnswer: "Orange", question: "What citrus fruit was it?" },
+          { imageUrl: "https://placehold.co/600x450/DAF7A6/000000?text=Green+Field", correctAnswer: "Green Field", question: "What open, green area was shown?" },
+          { imageUrl: "https://placehold.co/600x450/FFC0CB/000000?text=Pink+Flower", correctAnswer: "Pink Flower", question: "What color was the flower?" },
+          { imageUrl: "https://placehold.co/600x450/DDA0DD/000000?text=Purple+Grapes", correctAnswer: "Purple Grapes", question: "What fruit, often used for wine, was that?" },
+          { imageUrl: "https://placehold.co/600x450/F0F8FF/000000?text=Snowy+Peak", correctAnswer: "Snowy Peak", question: "What kind of peak did you observe?" },
+          { imageUrl: "https://placehold.co/600x450/ADD8E6/000000?text=Light+Blue+Sky", correctAnswer: "Light Blue Sky", question: "What was the dominant color of the sky?" },
+          { imageUrl: "https://placehold.co/600x450/FFE5B4/000000?text=Beach", correctAnswer: "Beach", question: "What sandy coastal area was shown?" },
+          { imageUrl: "https://placehold.co/600x450/E0BBE4/000000?text=Abstract+Art", correctAnswer: "Abstract Art", question: "What style of artwork was that?" },
+          { imageUrl: "https://placehold.co/600x450/957DAD/000000?text=Violin", correctAnswer: "Violin", question: "What musical instrument was in the image?" },
+          { imageUrl: "https://placehold.co/600x450/C4E17C/000000?text=Lime", correctAnswer: "Lime", question: "What small green citrus fruit was it?" },
+          { imageUrl: "https://placehold.co/600x450/FFEFD5/000000?text=Sand+Dunes", correctAnswer: "Sand Dunes", question: "What desert landscape feature was shown?" },
+          { imageUrl: "https://placehold.co/600x450/CD853F/000000?text=Wooden+Table", correctAnswer: "Wooden Table", question: "What piece of furniture was visible?" },
+          { imageUrl: "https://placehold.co/600x450/DEB887/000000?text=Desert+Cactus", correctAnswer: "Desert Cactus", question: "What spiky plant from the desert was that?" },
+          { imageUrl: "https://placehold.co/600x450/F5DEB3/000000?text=Wheat+Field", correctAnswer: "Wheat Field", question: "What agricultural field was pictured?" },
+          { imageUrl: "https://placehold.co/600x450/FFE4E1/000000?text=Rose", correctAnswer: "Rose", question: "What classic romantic flower was it?" },
+          { imageUrl: "https://placehold.co/600x450/AFEEEE/000000?text=Waterfall", correctAnswer: "Waterfall", question: "What natural water feature was captured?" },
+          { imageUrl: "https://placehold.co/600x450/A7C7E7/000000?text=Cloudy+Sky", correctAnswer: "Cloudy Sky", question: "What was the weather condition of the sky?" },
+          { imageUrl: "https://placehold.co/600x450/D2B48C/000000?text=Coffee+Cup", correctAnswer: "Coffee Cup", question: "What common beverage container was seen?" },
+          { imageUrl: "https://placehold.co/600x450/E6E6FA/000000?text=Starry+Night", correctAnswer: "Starry Night", question: "What celestial phenomenon was depicted?" }
+        ];
+
+        // Shuffle quiz data to randomize order
+        quizData = quizData.sort(() => Math.random() - 0.5);
+        totalRoundsEl.textContent = quizData.length;
+
+        // --- Web Speech API Setup ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!SpeechRecognition) {
+          showModal("Browser Not Supported", "Sorry, your browser does not support the Web Speech API. Please try Chrome or Edge.");
+          startBtn.disabled = true; // Disable speech button if not supported
+          return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US'; // Set to English for better LLM evaluation
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1; // Get only the most probable result
+        recognition.continuous = false; // Important: Make sure it stops after one utterance or timeout
+
+        // --- Custom Modal Functions (replacing alert()) ---
+        function showModal(title, message) {
+          modalTitle.textContent = title;
+          modalMessage.textContent = message;
+          customModal.style.display = 'flex';
+        }
+
+        function hideModal() {
+          customModal.style.display = 'none';
+        }
+
+        modalCloseBtn.addEventListener('click', hideModal);
+
+        // --- Game Logic Functions ---
+
+        /**
+         * Starts the game, initializing score and round.
+         */
+        function startGame() {
+          currentScore = 0;
+          currentRound = 0;
+          currentQuestionIndex = 0;
+          scoreEl.textContent = currentScore;
+          gameActive = true;
+          gameStartScreen.classList.add('hidden');
+          gameActiveScreen.classList.remove('hidden');
+          nextRound();
+        }
+
+        /**
+         * Proceeds to the next round of the game.
+         */
+        function nextRound() {
+          if (currentQuestionIndex >= quizData.length) {
+            endGame();
+            return;
+          }
+
+          currentRound++;
+          currentRoundEl.textContent = currentRound;
+          evaluationText.textContent = 'Pending...';
+          evaluationText.style.color = '#8b5cf6'; // Reset color
+
+          const question = quizData[currentQuestionIndex];
+          quizImage.src = question.imageUrl;
+          quizImage.alt = question.correctAnswer;
+          quizImage.style.opacity = '1'; // Show image
+
+          questionTextEl.textContent = 'Memorize this image!';
+          startBtn.disabled = true; // Disable speech during memorization phase
+          resultText.textContent = '...';
+          speechEvaluationTriggered = false; // Reset flag for new round
+
+          startImageTimer();
+        }
+
+        /**
+         * Starts the 3-second countdown for image display.
+         */
+        function startImageTimer() {
+          let timeLeft = imageTimerDuration;
+          timerDisplay.textContent = timeLeft;
+          timerBar.style.width = '100%'; // Start bar full
+          timerBar.style.transition = `width ${imageTimerDuration}s linear`; // Animate width over duration
+
+          timerInterval = setInterval(() => {
+            timeLeft--;
+            timerDisplay.textContent = timeLeft;
+            if (timeLeft <= 0) {
+              clearInterval(timerInterval);
+              onImageTimerEnd();
+            }
+          }, 1000);
+        }
+
+        /**
+         * Actions to perform when the image display timer ends.
+         */
+        function onImageTimerEnd() {
+          quizImage.style.opacity = '0'; // Hide image
+          const question = quizData[currentQuestionIndex];
+          questionTextEl.textContent = question.question;
+          startBtn.disabled = false; // Enable speech button
+        }
+
+        /**
+         * Ends the game and displays final score.
+         */
+        function endGame() {
+          gameActive = false;
+          showModal("Game Over!", `You scored ${currentScore} points across ${quizData.length} rounds!`);
+          gameStartScreen.classList.remove('hidden');
+          gameActiveScreen.classList.add('hidden');
+        }
+
+        /**
+         * Evaluates the spoken answer against the correct answer using the Gemini API.
+         * @param {string} spokenAnswer - The text transcribed from user's speech.
+         * @param {string} correctAnswer - The expected correct answer for the current question.
+         */
+        async function evaluateAnswerWithAI(spokenAnswer, correctAnswer) {
+          // Prevent multiple evaluations if this function is called more than once for a single speech session
+          if (speechEvaluationTriggered) {
+            console.log('Evaluation already triggered for this speech session. Skipping.');
+            return;
+          }
+          speechEvaluationTriggered = true; // Set flag
+
+          evaluationText.textContent = 'Evaluating with AI...';
+          evaluationText.style.color = '#8b5cf6'; // Purple for evaluating
+
+          try {
+            const prompt = `You are a helpful AI assistant for a photo quiz game. A user has spoken an answer to a question, and I need you to evaluate if their spoken answer is correct or nearly correct based on the *expected correct answer*.
+            Spoken Answer: '${spokenAnswer}'
+            Expected Correct Answer: '${correctAnswer}'
+            Please respond with a JSON object containing \`isCorrect\` (boolean) and \`reason\` (string explaining why).
+            Example correct: \`{ "isCorrect": true, "reason": "The spoken answer '${spokenAnswer}' is a perfect match for the expected correct answer '${correctAnswer}'" }\`
+            Example nearly correct: \`{ "isCorrect": true, "reason": "The spoken answer '${spokenAnswer}' is very similar to the expected correct answer '${correctAnswer}', indicating a correct understanding." }\`
+            Example incorrect: \`{ "isCorrect": false, "reason": "The spoken answer '${spokenAnswer}' is not related to the expected correct answer '${correctAnswer}'" }\`
+            Consider synonyms, common mispronunciations, and slightly different phrasing as correct. Focus on the semantic meaning.`;
+
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+            const payload = {
+                contents: chatHistory,
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            "isCorrect": { "type": "BOOLEAN" },
+                            "reason": { "type": "STRING" }
+                        },
+                        "propertyOrdering": ["isCorrect", "reason"]
+                    }
+                }
+            };
+
+            const apiKey = ""; // Canvas will automatically provide the API key
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            const response = await fetch(apiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            console.log('AI Evaluation Raw Result:', result);
+
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+              const jsonResponseString = result.candidates[0].content.parts[0].text;
+              const aiEvaluation = JSON.parse(jsonResponseString);
+
+              if (aiEvaluation.isCorrect) {
+                currentScore += 10;
+                scoreEl.textContent = currentScore;
+                evaluationText.textContent = `Correct! (+10 pts) - ${aiEvaluation.reason}`;
+                evaluationText.style.color = '#10b981'; // Green for correct
+              } else {
+                evaluationText.textContent = `Incorrect! - ${aiEvaluation.reason}`;
+                evaluationText.style.color = '#ef4444'; // Red for incorrect
+              }
+            } else {
+              evaluationText.textContent = 'AI evaluation failed: Unexpected response format.';
+              evaluationText.style.color = '#f97316'; // Orange for warning
+              console.error('AI evaluation failed: Unexpected response format', result);
+            }
+          } catch (error) {
+            console.error('Error evaluating answer with AI:', error);
+            evaluationText.textContent = `AI evaluation error: ${error.message}`;
+            evaluationText.style.color = '#ef4444'; // Red for error
+          } finally {
+            startBtn.disabled = false; // Re-enable if needed for next round, or manage flow
+            currentQuestionIndex++;
+            // Increased delay to 5 seconds before next round or end game
+            setTimeout(() => {
+              nextRound();
+            }, 5000); // Wait 5 seconds before next round or end game
+          }
+        }
+
+
+        // --- Event Handlers ---
+
+        startGameBtn.addEventListener('click', startGame);
+
+        recognition.onresult = (event) => {
+          const last = event.results.length - 1;
+          const spokenText = event.results[last][0].transcript.trim();
+
+          resultText.textContent = spokenText;
+          startBtn.disabled = true; // Disable during AI processing
+
+          const currentQuestion = quizData[currentQuestionIndex];
+          // Only evaluate if not already triggered by an error or a previous result
+          if (!speechEvaluationTriggered) {
+             evaluateAnswerWithAI(spokenText, currentQuestion.correctAnswer);
+          }
+        };
+
+        recognition.onend = () => {
+          if (gameActive) { // Only update button text if game is active
+            startBtn.textContent = 'Speak Your Answer';
+            // Important: Do NOT re-enable startBtn.disabled here. 
+            // It's handled by evaluateAnswerWithAI's finally block to prevent race conditions.
+
+            // If speech evaluation hasn't been triggered by onresult or no-speech error,
+            // this implies recognition ended for some other reason (e.g., short silence, permission issue).
+            // This fallback ensures game always progresses, unless it's a critical error like 'not-allowed'.
+            if (!speechEvaluationTriggered) {
+                console.log('Speech recognition ended without a result or explicit no-speech error. Treating as no answer.');
+                const currentQuestion = quizData[currentQuestionIndex];
+                evaluateAnswerWithAI("no answer detected", currentQuestion.correctAnswer);
+            }
+          }
+        };
+
+        recognition.onerror = (event) => {
+          console.error('Speech recognition error', event.error);
+          let errorMessage = `An error occurred during speech recognition: ${event.error}`;
+          if (event.error === 'not-allowed') {
+            errorMessage = 'Microphone access was denied. Please allow microphone access in your browser settings to play.';
+            showModal("Speech Error", errorMessage);
+            startBtn.disabled = false; // Re-enable button
+            // This is a critical error, the game cannot proceed without user fixing permissions
+            speechEvaluationTriggered = true; // Mark as handled to prevent onend from triggering
+          } else if (event.error === 'no-speech') {
+            errorMessage = 'No speech was detected. Treating as incorrect answer.';
+            resultText.textContent = 'No speech detected.';
+            // Automatically evaluate as incorrect and proceed to next round
+            // Only evaluate if not already triggered
+            if (!speechEvaluationTriggered) {
+                evaluateAnswerWithAI("", quizData[currentQuestionIndex].correctAnswer); // Pass empty string for no speech
+            }
+          } else if (event.error === 'aborted') {
+            errorMessage = 'Speech recognition was aborted. This might happen if you click the button again too quickly or if another process interrupts.';
+            showModal("Speech Error", errorMessage);
+            startBtn.disabled = false; // Re-enable button
+            speechEvaluationTriggered = true; // Mark as handled
+          } else if (event.error === 'network') {
+            errorMessage = 'Network error during speech recognition. Please check your internet connection.';
+            showModal("Speech Error", errorMessage);
+            startBtn.disabled = false; // Re-enable button
+            speechEvaluationTriggered = true; // Mark as handled
+          } else {
+            // For other unexpected errors
+            showModal("Speech Error", errorMessage);
+            startBtn.disabled = false; // Re-enable button
+            speechEvaluationTriggered = true; // Mark as handled
+          }
+        };
+
+        startBtn.addEventListener('click', () => {
+          try {
+            console.log('Attempting to start speech recognition...'); // Added for debugging
+            recognition.start();
+            startBtn.textContent = 'Listening...';
+            startBtn.disabled = true;
+            resultText.textContent = 'Listening...';
+            evaluationText.textContent = '...';
+            evaluationText.style.color = '#8b5cf6'; // Reset color
+            speechEvaluationTriggered = false; // Reset flag when starting a new recognition session
+          } catch (error) {
+            console.error("Error starting recognition:", error);
+            showModal("Error Starting Speech", "Could not start speech recognition. It might already be active or there's a permission issue.");
+            startBtn.disabled = false; // Re-enable button
+            speechEvaluationTriggered = true; // Mark as handled to prevent onend fallback
+          }
+        });
+      });
+    </script>
+  </body>
 </html>
